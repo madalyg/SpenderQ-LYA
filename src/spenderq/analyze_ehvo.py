@@ -26,16 +26,15 @@ from spenderq.spenderq import SpenderQ
 
 ########################################################################################################################################
 
-#CASE_DIR = Path("dat/Dense_Lya")
-CASE_DIR = Path("dat/Variability/NV")
-#CSV_PATH = CASE_DIR / "J2318_list_fits.csv"
-CSV_PATH = CASE_DIR / "NV_variability_list_fits.csv"
-SHOW_PLOT = False # Set to True to show plots (note: multiple plots are generated for each quasar, set to False for large directories)
+CASE_DIR = Path("dat/Dense_Lya")
+#CASE_DIR = Path("dat/Variability/NV/")
+CSV_PATH = CASE_DIR / "J2318_list_fits.csv"
+#CSV_PATH = CASE_DIR / "NV_variability_list_fits.csv"
+SHOW_PLOT = False # Set to True to show all plots 
 
 ########################################################################################################################################
 
 MODEL_NAME = "qso.dr1.hiz"
-# OUTPUT_DIR, RECON_NORM_RATIOS_DIR, and FLUX_OVER_RECON_DIR are set for each quasar at runtime
 OUTPUT_DIR = CASE_DIR / "spenderq_analysis"
 RECON_NORM_RATIOS_DIR = CASE_DIR / "recon_norm_ratios"
 FLUX_OVER_RECON_DIR = CASE_DIR / "flux_over_recon"
@@ -43,15 +42,16 @@ FLUX_OVER_RECON_DIR = CASE_DIR / "flux_over_recon"
 # Rest wavelengths
 LYA = 1215.67
 LYB = 1026.00
+RECON_PLOT_XLIM_REST = (600.0, 1700.0)
 ION_LINES = {
     "N V": (1238.82, 1242.80),
     "Si IV": (1393.755, 1402.770),
     "C IV": (1548.1950, 1550.770),
 }
 
-# Wavelength limits for plotting
-RATIO_XLIM_LOW = 3500.0
-RATIO_XLIM_HIGH = 6000.0
+def lya_region_observed(z_qso):
+    """Return observed-frame bounds for the Lyα forest region (Lyβ–Lyα rest)."""
+    return LYB * (1.0 + z_qso), LYA * (1.0 + z_qso)
 
 
 def get_column(data, *names):
@@ -155,7 +155,7 @@ def to_rest_frame(wave_obs, flux, ivar, z_qso):
 def rescale_continuum_to_flux(wave_obs, flux, continuum, ivar, z_qso):
     """Rescale continuum so its median matches the observed flux at the normalization window.
 
-    This removes the small shift between SpenderQ's normalization and the SDSS normalization, 
+    Removes the small shift between SpenderQ's normalization and the SDSS normalization, 
     setting the continuum-normalized ratio to ~1 at the normalization window
     (1445-1455 Å restframe).
     """
@@ -193,6 +193,8 @@ def run_spenderq(wave_obs, flux, ivar, z_qso):
         spenderq.wave_recon(), np.asarray(recon[0]), wave_obs, z_qso
     )
     continuum, cont_scale = rescale_continuum_to_flux(wave_obs, flux, continuum, ivar, z_qso)
+
+    # Calculate the ratio of flux over continuum
     cont_norm_ratio = np.divide(
         flux,
         continuum,
@@ -211,35 +213,37 @@ def run_spenderq(wave_obs, flux, ivar, z_qso):
 
 
 def plot_continuum_over_spectrum_restframe(path, wave_obs, flux, continuum, ivar, z_qso):
-    """Plot continuum/flux in rest frame. ratio > 1 indicates absorption."""
-    wave_rest, flux_rest, _ = to_rest_frame(wave_obs, flux, ivar, z_qso)
-
+    """Plot flux / SpenderQ continuum in the observed frame."""
     ratio = np.divide(
-        flux_rest,
+        flux,
         continuum,
         out=np.full_like(continuum, np.nan, dtype=float),
-        where=np.isfinite(continuum) & (continuum != 0) & np.isfinite(flux_rest) & (ivar > 0), # Skip points with infinite values or no ivar
+        where=np.isfinite(continuum) & (continuum != 0) & np.isfinite(flux) & (ivar > 0),
     )
 
+    wave_lo = RECON_PLOT_XLIM_REST[0] * (1.0 + z_qso)
+    wave_hi = RECON_PLOT_XLIM_REST[1] * (1.0 + z_qso)
+    lya_obs = LYA * (1.0 + z_qso)
+
     fig, ax = plt.subplots(figsize=(12, 4), constrained_layout=True)
-    ax.plot(wave_rest, ratio, color="black", lw=0.8)
+    ax.plot(wave_obs, ratio, color="black", lw=0.8)
     ax.axhline(1.0, color="0.5", ls="--", lw=0.8, label="spectrum = continuum")
     ax.axhline(0.0, color="0.8", ls=":", lw=0.6)
 
-    ax.set_xlabel("rest-frame wavelength [Å]")
-    ax.set_ylabel("observed flux / SpenderQ continuum")
-    ax.set_ylim(-0.2, 2.0)
-    ax.set_xlim(1000.0, 1700.0)
+    ax.set_xlabel("observed wavelength [Å]")
+    ax.set_ylabel("flux / SpenderQ continuum")
+    ax.set_ylim(0.0, 2.0)
+    ax.set_xlim(wave_lo, wave_hi)
 
-    ax.axvline(LYA, color="tab:purple", ls="--", lw=0.9, label="Ly-alpha")
+    ax.axvline(lya_obs, color="tab:purple", ls="--", lw=0.9, label="Ly-alpha")
     for ion, waves in ION_LINES.items():
         for w in waves:
-            ax.axvline(w, color="tab:red", ls=":", lw=0.9)
-        ax.text(waves[0], ax.get_ylim()[1] * 0.97, ion, color="tab:red", fontsize=14, va="top")
+            ax.axvline(w * (1.0 + z_qso), color="tab:red", ls=":", lw=0.9)
+        ax.text(waves[0] * (1.0 + z_qso), ax.get_ylim()[1] * 0.97, ion, color="tab:red", fontsize=14, va="top")
 
     ax.legend(fontsize=14)
-    outpath = OUTPUT_DIR / f"{path.stem}_continuum_over_spectrum_restframe.png"
-    fig.suptitle(f"{path.name}: observed flux / SpenderQ continuum (rest frame)", fontsize=14)
+    outpath = OUTPUT_DIR / f"{path.stem}_flux_over_continuum_observed.png"
+    fig.suptitle(f"{path.name}: flux / SpenderQ continuum (observed frame)", fontsize=14)
     fig.savefig(outpath, dpi=200)
     if SHOW_PLOT:
         plt.show()
@@ -257,7 +261,7 @@ def get_mjd(path):
 
 
 def save_flux_over_recon_txt(path, wave_obs, cont_norm_ratio):
-    """Save flux / SpenderQ continuum as an observed-frame text file.
+    """Save flux / SpenderQ continuum as an observed-frame txt file.
 
     Output: FLUX_OVER_RECON_DIR/{MJD}_over_recon.txt
     Columns: observed_wavelength, flux_over_recon, err
@@ -431,9 +435,14 @@ def plot_analysis(path, wave_obs, flux, continuum, weight, weight_clipped, z_qso
         alpha=0.5,
         label="masked Ly-alpha forest",
     )
-    wave_lo, wave_hi = 1000.0, 1700.0
+    wave_lo, wave_hi = RECON_PLOT_XLIM_REST
+    in_win = (wave_rest > wave_lo) & (wave_rest < wave_hi)
+    ylim_data = np.concatenate([flux[in_win], continuum[in_win]])
+    ylim_data = ylim_data[np.isfinite(ylim_data)]
+    ylo, yhi = np.nanpercentile(ylim_data, [0.5, 99.5])
+    pad = 0.1 * (yhi - ylo)
     ax.set_xlim(wave_lo, wave_hi)
-    ax.set_ylim(*np.nanpercentile(flux[(wave_rest > wave_lo) & (wave_rest < wave_hi)], [1, 99]))
+    ax.set_ylim(ylo - pad, yhi + pad)
     ax.set_ylabel("normalized flux")
     ax.set_xlabel("rest-frame wavelength [Å]")
     ax.legend(loc="upper right", fontsize=14)
@@ -453,6 +462,55 @@ def plot_analysis(path, wave_obs, flux, continuum, weight, weight_clipped, z_qso
         plt.close(fig)
 
     return outpath, int(np.count_nonzero(lya_removed))
+
+
+def plot_analysis_observed(path, wave_obs, flux, continuum, weight, weight_clipped, z_qso):
+    """Plot spectrum and SpenderQ continuum in the observed frame."""
+    wave_rest = wave_obs / (1.0 + z_qso)
+    lya_forest = (wave_rest > LYB) & (wave_rest < LYA)
+    lya_removed = lya_forest & (weight > 0) & (weight_clipped == 0)
+
+    wave_lo = RECON_PLOT_XLIM_REST[0] * (1.0 + z_qso)
+    wave_hi = RECON_PLOT_XLIM_REST[1] * (1.0 + z_qso)
+    in_win = (wave_obs >= wave_lo) & (wave_obs <= wave_hi)
+
+    fig, ax = plt.subplots(figsize=(12, 4), constrained_layout=True)
+    ax.plot(wave_obs, flux, color="0.25", lw=0.7, label="spectrum")
+    ax.plot(wave_obs, continuum, color="tab:blue", lw=1.2, label="SpenderQ continuum")
+    ax.scatter(
+        wave_obs[lya_removed],
+        flux[lya_removed],
+        s=5,
+        color="tab:orange",
+        alpha=0.5,
+        label="masked Ly-alpha forest",
+    )
+
+    ylim_data = np.concatenate([flux[in_win], continuum[in_win]])
+    ylim_data = ylim_data[np.isfinite(ylim_data)]
+    ylo, yhi = np.nanpercentile(ylim_data, [0.5, 99.5])
+    pad = 0.1 * (yhi - ylo)
+    ax.set_xlim(wave_lo, wave_hi)
+    ax.set_ylim(ylo - pad, yhi + pad)
+    ax.set_ylabel("normalized flux")
+    ax.set_xlabel("observed wavelength [Å]")
+    ax.legend(loc="upper right", fontsize=14)
+
+    ax.axvline(LYA * (1.0 + z_qso), color="tab:purple", ls="--", lw=0.9, label="Ly-alpha")
+    for ion, waves in ION_LINES.items():
+        for w in waves:
+            ax.axvline(w * (1.0 + z_qso), color="tab:red", ls=":", lw=0.9)
+        ax.text(waves[0] * (1.0 + z_qso), ax.get_ylim()[1], ion, color="tab:red", fontsize=14, va="top")
+
+    outpath = OUTPUT_DIR / f"{path.stem}_spenderq_ehvo_observed.png"
+    fig.suptitle(f"{path.name}: SpenderQ continuum (observed frame)", fontsize=14)
+    fig.savefig(outpath, dpi=200)
+    if SHOW_PLOT:
+        plt.show()
+    else:
+        plt.close(fig)
+
+    return outpath
 
 
 def quasar_dir(quasar_name):
@@ -478,12 +536,22 @@ def analyze_file(path, z_qso):
         weight_clipped,
         z_qso,
     )
+    analysis_obs_path = plot_analysis_observed(
+        path,
+        wave_grid,
+        flux_grid,
+        continuum_grid,
+        ivar_grid,
+        weight_clipped,
+        z_qso,
+    )
     ratio_path = plot_continuum_over_spectrum_restframe(
         path, wave_grid, flux_grid, continuum_grid, ivar_grid, z_qso
     )
     flux_recon_path = save_flux_over_recon_txt(path, wave_grid, cont_norm_ratio)
     print(f"{path.name}: normalization={norm:.4g}")
     print(f"Saved {analysis_path} ({n_lya_removed} Ly-alpha forest pixels masked)")
+    print(f"Saved {analysis_obs_path}")
     print(f"Saved {ratio_path}")
     print(f"Saved {flux_recon_path}")
 
@@ -509,7 +577,7 @@ def read_csv(csv_path):
     return rows
 
 
-def _run_quasar(quasar_name, obs1_filename, obs2_filename, z_qso, CASE_DIR):
+def run_quasar(quasar_name, obs1_filename, obs2_filename, z_qso, CASE_DIR):
     """Run the full SpenderQ analysis for one quasar pair and save all outputs."""
     global OUTPUT_DIR, RECON_NORM_RATIOS_DIR
 
@@ -544,7 +612,8 @@ def _run_quasar(quasar_name, obs1_filename, obs2_filename, z_qso, CASE_DIR):
     wave = a["wave_grid"]
     cont_a = a["continuum_grid"]
     cont_b = np.interp(wave, b["wave_grid"], b["continuum_grid"], left=np.nan, right=np.nan)
-    in_range = (wave >= RATIO_XLIM_LOW) & (wave <= RATIO_XLIM_HIGH)
+    ratio_lo, ratio_hi = lya_region_observed(z_qso)
+    in_range = (wave >= ratio_lo) & (wave <= ratio_hi)
 
     # Continuum ratio text files
     for label_num, label_den, ratio in [
@@ -567,17 +636,29 @@ def _run_quasar(quasar_name, obs1_filename, obs2_filename, z_qso, CASE_DIR):
                          where=np.isfinite(cont_a) & np.isfinite(cont_b) & (cont_b != 0))
     ratio_ba = np.divide(cont_b, cont_a, out=np.full_like(cont_b, np.nan),
                          where=np.isfinite(cont_a) & np.isfinite(cont_b) & (cont_a != 0))
-    fig, axes = plt.subplots(2, 1, figsize=(12, 6), sharex=True, constrained_layout=True)
-    axes[0].plot(wave[in_range], ratio_ab[in_range], color="black", lw=0.9)
-    axes[0].axhline(1.0, color="0.5", ls="--", lw=0.8)
-    axes[0].set_ylabel(f"{a['path'].stem}/{b['path'].stem}")
-    axes[1].plot(wave[in_range], ratio_ba[in_range], color="black", lw=0.9)
-    axes[1].axhline(1.0, color="0.5", ls="--", lw=0.8)
-    axes[1].set_ylabel(f"{b['path'].stem}/{a['path'].stem}")
-    axes[1].set_xlabel("observed wavelength [Å]")
-    axes[1].set_xlim(RATIO_XLIM_LOW, RATIO_XLIM_HIGH)
+    mjd_a = get_mjd(a["path"])
+    mjd_b = get_mjd(b["path"])
+    fig, axes = plt.subplots(2, 1, figsize=(12, 6), constrained_layout=True)
+    for ax, ratio, ylabel in zip(
+        axes,
+        [ratio_ab, ratio_ba],
+        [f"{mjd_a} recon / {mjd_b} recon", f"{mjd_b} recon / {mjd_a} recon"],
+    ):
+        ax.plot(wave[in_range], ratio[in_range], color="black", lw=0.9)
+        ax.axhline(1.0, color="0.5", ls="--", lw=0.8)
+        ax.axvline(LYA * (1.0 + z_qso), color="tab:purple", ls="--", lw=0.9)
+        ax.set_ylabel(ylabel, fontsize=12)
+        ax.set_xlabel("observed wavelength [Å]")
+        ax.set_xlim(ratio_lo, ratio_hi)
+        r = ratio[in_range & np.isfinite(ratio)]
+        ylo = (np.nanmin(r) - 0.05) if r.size else 0.85
+        ax.set_ylim(ylo, 1.5)
     ratio_png = OUTPUT_DIR / f"{a['path'].stem}_vs_{b['path'].stem}_continuum_ratio_panels.png"
-    fig.suptitle(f"SpenderQ continuum ratios: {a['path'].stem} vs {b['path'].stem}", fontsize=14)
+    fig.suptitle(
+        f"SpenderQ continuum ratios: {a['path'].stem} vs {b['path'].stem} "
+        f"(Lyα forest: {LYB:.0f}–{LYA:.0f} Å rest)",
+        fontsize=14,
+    )
     fig.savefig(ratio_png, dpi=200)
     if not SHOW_PLOT:
         plt.close(fig)
@@ -613,7 +694,7 @@ def save_summary_csv(case_dir, entries):
     case_dir : Path
         Root directory
     entries : list of (Path, float)
-        Each element is (ratio_txt_path, z_qso) collected from _run_quasar.
+        Each element is (ratio_txt_path, z_qso) collected from run_quasar.
     """
     case_name = case_dir.resolve().name
     out_csv = case_dir / f"{case_name}_recon_ratios_norm.csv"
@@ -635,7 +716,7 @@ if __name__ == "__main__":
 
     summary_entries = []
     for q in quasars:
-        result = _run_quasar(q["name"], q["obs1"], q["obs2"], q["redshift"], CASE_DIR)
+        result = run_quasar(q["name"], q["obs1"], q["obs2"], q["redshift"], CASE_DIR)
         if result is not None:
             ratio_txts, z = result
             for p in ratio_txts:
