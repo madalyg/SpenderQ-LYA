@@ -1,6 +1,6 @@
 # SpenderQ-LYA
 
-Batch pipeline for finding **extremely high-velocity outflow (EHVO)** absorption in SDSS quasar spectra, including troughs from outflows at v > 20% the speed of light that are buried deep in the Lyman-Alpha (Ly-α) forest.
+Automated pipeline for finding **extremely high-velocity outflow (EHVO)** absorption in SDSS quasar spectra, including troughs from outflows at v > 20% the speed of light that are buried deep in the Lyman-Alpha (Ly-α) forest.
 
 Only two such forest EHVOs have been identified. The absorption is mixed with the Ly-α forest, so they cannot be identified from a single spectrum by eye. This repo uses [SpenderQ](https://github.com/changhoonhahn/SpenderQ) to reconstruct the unabsorbed continuum, then compares **two epochs of the same quasar**.
 
