@@ -1,7 +1,7 @@
 """Rest- and observed-frame wavelength bands for continuum / ratio summaries.
 
 Shared constants align with plot limits in analyze_ehvo (3800–6000 Å obs) and the
-1450 Å anchor used in convert_fits. Import REGIONS where you need the same masks.
+1450 Å anchor used in convert_fits. Import REGIONS where the same masks are needed.
 """
 
 from __future__ import annotations

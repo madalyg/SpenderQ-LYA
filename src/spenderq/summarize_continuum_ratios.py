@@ -1,6 +1,7 @@
 """Read SpenderQ continuum ratio spectra (*_ratio_norm.txt from analyze_ehvo) and compute
-median ratios in standard rest-frame bands for each exposure pair. Prints a batch summary
-and writes continuum_ratio_summary.csv when run on a case or quasar directory."""
+median ratios in standard rest-frame bands for each pair. Prints a batch summary
+and writes continuum_ratio_summary.csv when run on a case or quasar directory. Useful for comparing
+the continuum ratios of two spectra to determine if they are consistent with an underlying quasar continuum."""
 
 import argparse
 import csv
