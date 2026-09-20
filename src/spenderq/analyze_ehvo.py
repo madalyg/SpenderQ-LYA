@@ -590,6 +590,22 @@ def run_quasar(quasar_name, obs1_filename, obs2_filename, z_qso, CASE_DIR):
     RECON_NORM_RATIOS_DIR.mkdir(parents=True, exist_ok=True)
     FLUX_OVER_RECON_DIR.mkdir(parents=True, exist_ok=True)
 
+    fits1, fits2 = qso_dir / obs1_filename, qso_dir / obs2_filename
+    done = OUTPUT_DIR / ".complete"
+    if (
+        done.exists()
+        and fits1.exists()
+        and fits2.exists()
+        and done.stat().st_mtime >= fits1.stat().st_mtime
+        and done.stat().st_mtime >= fits2.stat().st_mtime
+    ):
+        print(f"\n{'='*60}\n  [skip] {qso_prefix} — delete {done.name} to rerun\n")
+        mjd_a, mjd_b = get_mjd(fits1), get_mjd(fits2)
+        return [
+            RECON_NORM_RATIOS_DIR / f"{mjd_a}_over_{mjd_b}recon.txt",
+            RECON_NORM_RATIOS_DIR / f"{mjd_b}_over_{mjd_a}recon.txt",
+        ], z_qso
+
     print(f"\n{'='*60}")
     print(f"Quasar: {quasar_name}  z={z_qso}")
     print(f"Dir:    {qso_dir}")
@@ -683,6 +699,7 @@ def run_quasar(quasar_name, obs1_filename, obs2_filename, z_qso, CASE_DIR):
     for p in ratio_txts:
         print(f"Saved {p}")
 
+    done.touch()
     return ratio_txts, z_qso
 
 
