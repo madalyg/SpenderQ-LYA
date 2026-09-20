@@ -86,3 +86,6 @@ src/spenderq/
 ## SpenderQ
 
 Continuum reconstruction is [SpenderQ](https://github.com/changhoonhahn/SpenderQ) (Hahn et al.): a data-driven spectrum autoencoder that masks absorption and reconstructs the intrinsic quasar spectrum. This repository adds SDSS data ingestion, per-quasar directory layout, and detailed epoch-to-epoch EHVO analysis on top of that model.
+
+<img src="./doc/spenderq_framework.png" width="600" alt="SpenderQ framework schematic">
+
