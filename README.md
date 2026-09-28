@@ -4,7 +4,7 @@ Automated pipeline for finding **extremely high-velocity outflow (EHVO)** absorp
 
 Only two such forest EHVOs have been identified. The absorption is mixed with the Ly-α forest, so they cannot be identified from a single spectrum by eye. This repo uses [SpenderQ](https://github.com/changhoonhahn/SpenderQ) to reconstruct the unabsorbed continuum, then compares **two epochs of the same quasar**.
 
-**First principles.** Outflow absorption varies between epochs due to the fast-moving nature of the gases in outflows. Lyα forest lines do not: they stay relatively constant over the timescales in which we observe quasars. Dividing two spectra of the same quasar therefore isolates the variable (outflow) absorption and cancels the forest lines. Each spectrum is then divided by its SpenderQ reconstruction, which normalizes it if the underlying continuum is the same in both epochs. Dividing those continuum-normalized spectra by each other amplifies the variable absorption between epochs.
+**First principles.** Outflow absorption varies between epochs due to the fast-moving nature of the gases in quasar outflows. Ly-α forest lines do not since they stay relatively constant over the timescales in which we observe quasars. Dividing two spectra of the same quasar therefore isolates the variable (outflow) absorption and cancels the Ly-α forest lines. Each spectrum is then divided by its SpenderQ reconstruction, which normalizes it if the underlying continuum is the same in both epochs of observation. Dividing those continuum-normalized spectra by each other amplifies the variable absorption between epochs.
 
 It is built to run on large datasets: one CSV of quasars and two FITS filenames per object, for any SDSS data release that uses the usual `spec-PLATE-MJD-FIBER.fits` naming.
 
@@ -63,8 +63,8 @@ Under `case_dir/<quasar>/`:
 |------|----------|
 | `spec-*.fits` | Downloaded spectra |
 | `spenderq_analysis/` | Reconstruction plots (rest + observed), continuum-ratio and flux/continuum-ratio panels, `*_ratio_norm.txt` |
-| `../recon_norm_ratios/` | `(flux/cont)_A / (flux/cont)_B` text files, named by MJD |
-| `../flux_over_recon/` | Per-epoch `flux / continuum` text files |
+| `../flux_over_recon/` | Per-epoch `flux / continuum` text files. This is the continuum-normalized flux for each spectrum. |
+| `../recon_norm_ratios/` | `(flux/cont)_A / (flux/cont)_B` text files, named by MJD. This is the ratio of two continuum-normalized spectra, which highlights variability across separate observations of the same quasar. |
 
 A case-level summary CSV of the recon-ratio files is written next to the case directory.
 
