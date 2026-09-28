@@ -663,17 +663,17 @@ def _run_quasar(quasar_name, obs1_filename, obs2_filename, z_qso, CASE_DIR):
         plt.close(fig)
     print(f"Saved {ratio_png}")
 
-    trans_ratio_png = plot_cont_norm_ratio_observed(
+    cont_norm_epoch_ratio_png = plot_cont_norm_ratio_observed(
         a["path"], b["path"], a["wave_grid"],
         a["cont_norm_ratio"], b["cont_norm_ratio"], z_qso,
     )
-    print(f"Saved {trans_ratio_png}")
+    print(f"Saved {cont_norm_epoch_ratio_png}")
 
-    trans_diff_png = plot_cont_norm_ratio_difference_observed(
+    cont_norm_epoch_diff_png = plot_cont_norm_ratio_difference_observed(
         a["path"], b["path"], a["wave_grid"],
         a["cont_norm_ratio"], b["cont_norm_ratio"], z_qso,
     )
-    print(f"Saved {trans_diff_png}")
+    print(f"Saved {cont_norm_epoch_diff_png}")
 
     ratio_txts = save_cont_norm_ratio_txt(
         a["path"], b["path"], a["wave_grid"],

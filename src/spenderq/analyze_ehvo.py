@@ -36,8 +36,8 @@ SHOW_PLOT = False # Set to True to show all plots
 
 MODEL_NAME = "qso.dr1.hiz"
 OUTPUT_DIR = CASE_DIR / "spenderq_analysis"
-RECON_NORM_RATIOS_DIR = CASE_DIR / "recon_norm_ratios"
-FLUX_OVER_RECON_DIR = CASE_DIR / "flux_over_recon"
+RECON_NORM_RATIOS_DIR = CASE_DIR / "recon_norm_ratios"  # where case-level epoch-vs-epoch (flux/recon) ratios will be saved
+FLUX_OVER_RECON_DIR = CASE_DIR / "flux_over_recon"  # where case-level (flux/recon) spectra (one per each MJD) will be saved
 
 # Rest wavelengths
 LYA = 1215.67
@@ -96,6 +96,7 @@ def load_sdss_like_spectrum(path, z_qso):
                 good_err = np.isfinite(err) & (err > 0)
                 ivar[good_err] = 1.0 / err[good_err] ** 2
 
+    # If wavelengths look rest-frame (too small for observed DESI grid), convert to observed A
     if np.nanpercentile(wave, 95) < np.nanmin(np.asarray(DESI._wave_obs)):
         wave = wave * (1.0 + z_qso)
 
@@ -105,6 +106,7 @@ def load_sdss_like_spectrum(path, z_qso):
 def normalize_spectrum(wave_obs, flux, ivar, z_qso):
     """Normalize near a clean continuum window."""
     wave_rest = wave_obs / (1.0 + z_qso)
+    # Anchor bands in mostly line-free continuum (1450 A main, 1700 A b
     windows = [(1445.0, 1455.0), (1700.0, 1705.0)]
 
     norm = np.nan
@@ -118,11 +120,13 @@ def normalize_spectrum(wave_obs, flux, ivar, z_qso):
         use = np.isfinite(flux) & (ivar > 0)
         norm = np.nanmedian(flux[use])
 
+    # Dividing flux by norm scales ivar by 1/(norm)^2 so S/N is unchanged.
     return flux / norm, ivar * norm**2, norm
 
 
 def resample_to_spenderq_grid(wave_obs, flux, ivar):
     """Interpolate a single spectrum onto SpenderQ's DESI wavelength grid."""
+    # SpenderQ was trained on fixed observed wavelength bins (DESI). SDSS must land on the same grid
     wave_grid = np.asarray(DESI._wave_obs, dtype=float)
     good = np.isfinite(wave_obs) & np.isfinite(flux) & np.isfinite(ivar) 
     good &= ivar > 0 # Check values are finite and that ivar > 0
@@ -135,6 +139,7 @@ def resample_to_spenderq_grid(wave_obs, flux, ivar):
     flux_grid = np.interp(wave_grid, wave_in, flux_in, left=np.nan, right=np.nan)
     ivar_grid = np.interp(wave_grid, wave_in, ivar_in, left=0.0, right=0.0)
 
+    # Outside SDSS coverage, flux/weight = 0 so SpenderQ ignores those pixels.
     bad = ~np.isfinite(flux_grid)
     flux_grid[bad] = 0.0
     ivar_grid[bad] = 0.0
@@ -173,6 +178,7 @@ def rescale_continuum_to_flux(wave_obs, flux, continuum, ivar, z_qso):
 
 
 def rebin_reconstruction_to_observed(wave_rest_model, recon_rest, wave_obs, z_qso):
+    # Model output is in restframe. Rebin to this spectrum's observed wavelengths before comparing to data
     wave_model_obs = wave_rest_model * (1.0 + z_qso)
     try:
         return U.trapz_rebin(wave_model_obs, recon_rest, xnew=wave_obs)
@@ -187,6 +193,7 @@ def run_spenderq(wave_obs, flux, ivar, z_qso):
 
     spenderq = SpenderQ(MODEL_NAME)
     weight_after_lya_clip = weight.clone()
+    # eval() iteratively zeroes weights on Lya forest pixels so the recon fits the continuum
     _, recon = spenderq.eval(spec, weight_after_lya_clip, z)
 
     continuum = rebin_reconstruction_to_observed(
@@ -203,7 +210,7 @@ def run_spenderq(wave_obs, flux, ivar, z_qso):
     )
 
     return (
-        np.asarray(recon[0]) * cont_scale,
+        np.asarray(recon[0]) * cont_scale,  # rest-frame recon on same flux scale as the data
         continuum,
         cont_norm_ratio,
         np.asarray(weight_after_lya_clip[0]),
@@ -268,6 +275,7 @@ def save_flux_over_recon_txt(path, wave_obs, cont_norm_ratio):
     """
     mjd = get_mjd(path)
     outpath = FLUX_OVER_RECON_DIR / f"{mjd}_over_recon.txt"
+    # Single epoch flux/recon (one file per epoch).
     valid = np.isfinite(wave_obs) & np.isfinite(cont_norm_ratio)
     np.savetxt(
         outpath,
@@ -287,6 +295,7 @@ def save_cont_norm_ratio_txt(path_a, path_b, wave_obs, cont_norm_ratio_a, cont_n
     mjd_a = get_mjd(path_a)
     mjd_b = get_mjd(path_b)
 
+    # Written to recon_norm_ratios/ for the case summary CSV and absorption pipeline.
     ratio_ab = np.divide(
         cont_norm_ratio_a,
         cont_norm_ratio_b,
@@ -323,6 +332,7 @@ def plot_cont_norm_ratio_observed(path_a, path_b, wave_obs, cont_norm_ratio_a, c
     mjd_a = get_mjd(path_a)
     mjd_b = get_mjd(path_b)
 
+    # Ratio of epoch-normalized spectra to emphasize variability vs constant lya forest.
     ratio_ab = np.divide(
         cont_norm_ratio_a,
         cont_norm_ratio_b,
@@ -361,7 +371,7 @@ def plot_cont_norm_ratio_observed(path_a, path_b, wave_obs, cont_norm_ratio_a, c
         )
 
     axes[1].set_xlabel("observed wavelength [Å]")
-    axes[1].set_xlim(3800.0, 6000.0)
+    axes[1].set_xlim(3800.0, 6000.0)  # wide SDSS window
 
     outpath = OUTPUT_DIR / f"{label_a}_vs_{label_b}_cont_norm_ratio_observed.png"
     fig.suptitle(
@@ -376,7 +386,8 @@ def plot_cont_norm_ratio_observed(path_a, path_b, wave_obs, cont_norm_ratio_a, c
 
 
 def plot_cont_norm_ratio_difference_observed(path_a, path_b, wave_obs, cont_norm_ratio_a, cont_norm_ratio_b, z_qso):
-    """Plot (flux1/cont1) - (flux2/cont2) and the reverse in observed wavelength (3800-6000 Å)."""
+    """Plot (flux1/cont1) - (flux2/cont2) and the reverse in observed wavelength (3800-6000 Å). 
+    Thi uses the same inputs as the ratio plots, but subtraction can sometimes be easier (instead of division) to read broad EHVO troughs"""
     label_a = path_a.stem
     label_b = path_b.stem
     mjd_a = get_mjd(path_a)
@@ -421,6 +432,7 @@ def plot_cont_norm_ratio_difference_observed(path_a, path_b, wave_obs, cont_norm
 def plot_analysis(path, wave_obs, flux, continuum, weight, weight_clipped, z_qso):
     wave_rest = wave_obs / (1.0 + z_qso)
     lya_forest = (wave_rest > LYB) & (wave_rest < LYA)
+    # Pixels SpenderQ weighted down when fitting the continuum
     lya_removed = lya_forest & (weight > 0) & (weight_clipped == 0)
 
     fig, ax = plt.subplots(figsize=(12, 4), constrained_layout=True)
@@ -591,6 +603,7 @@ def run_quasar(quasar_name, obs1_filename, obs2_filename, z_qso, CASE_DIR):
     FLUX_OVER_RECON_DIR.mkdir(parents=True, exist_ok=True)
 
     fits1, fits2 = qso_dir / obs1_filename, qso_dir / obs2_filename
+    # Skip reruns when inputs unchanged, and delete .complete to force a full reprocess.
     done = OUTPUT_DIR / ".complete"
     if (
         done.exists()
@@ -627,11 +640,13 @@ def run_quasar(quasar_name, obs1_filename, obs2_filename, z_qso, CASE_DIR):
     a, b = reconstructions[0], reconstructions[1]
     wave = a["wave_grid"]
     cont_a = a["continuum_grid"]
+    # Both epochs share the same grid after resampling. Interp aligns epoch B wavelengths onto epoch A's grid.
     cont_b = np.interp(wave, b["wave_grid"], b["continuum_grid"], left=np.nan, right=np.nan)
     ratio_lo, ratio_hi = lya_region_observed(z_qso)
+    # LyB–LyA rest → observed window where we compare continuum shapes (forest region).
     in_range = (wave >= ratio_lo) & (wave <= ratio_hi)
 
-    # Continuum ratio text files
+    # SpenderQ continuum_A / continuum_B (not flux/recon). Dividing mutually indepdent recons from different epochs checks recon stability between epochs.
     for label_num, label_den, ratio in [
         (a["path"].stem, b["path"].stem,
          np.divide(cont_a, cont_b, out=np.full_like(cont_a, np.nan),
@@ -680,17 +695,18 @@ def run_quasar(quasar_name, obs1_filename, obs2_filename, z_qso, CASE_DIR):
         plt.close(fig)
     print(f"Saved {ratio_png}")
 
-    trans_ratio_png = plot_cont_norm_ratio_observed(
+    # (flux/recon) epoch ratios and diffs 
+    cont_norm_epoch_ratio_png = plot_cont_norm_ratio_observed(
         a["path"], b["path"], a["wave_grid"],
         a["cont_norm_ratio"], b["cont_norm_ratio"], z_qso,
     )
-    print(f"Saved {trans_ratio_png}")
+    print(f"Saved {cont_norm_epoch_ratio_png}")
 
-    trans_diff_png = plot_cont_norm_ratio_difference_observed(
+    cont_norm_epoch_diff_png = plot_cont_norm_ratio_difference_observed(
         a["path"], b["path"], a["wave_grid"],
         a["cont_norm_ratio"], b["cont_norm_ratio"], z_qso,
     )
-    print(f"Saved {trans_diff_png}")
+    print(f"Saved {cont_norm_epoch_diff_png}")
 
     ratio_txts = save_cont_norm_ratio_txt(
         a["path"], b["path"], a["wave_grid"],
@@ -717,6 +733,7 @@ def save_summary_csv(case_dir, entries):
     out_csv = case_dir / f"{case_name}_recon_ratios_norm.csv"
     with open(out_csv, "w", newline="", encoding="utf-8") as fh:
         writer = csv.writer(fh)
+        # Column layout expected by downstream absorption search (recon_norm_ratios inputs). Thia is the format of the input files for the absorption search.
         writer.writerow(["NORM SPECTRA FILE NAME", "REDSHIFT", "CALCULATED SNR",
                          "NEEDS RECALCULATION", "Masked Regions"])
         for txt_path, z in entries:
@@ -726,7 +743,7 @@ def save_summary_csv(case_dir, entries):
 
 
 if __name__ == "__main__":
-    torch.set_grad_enabled(False)
+    torch.set_grad_enabled(False)  # We are not training the model, only running inference (aka running the model forward)
 
     quasars = read_csv(CSV_PATH)
     print(f"Found {len(quasars)} quasar(s) in {CSV_PATH}")
