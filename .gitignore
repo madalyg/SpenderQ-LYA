@@ -168,6 +168,6 @@ cython_debug/
 *.png
 *.fits
 *.txt
-*.csv
-!**/J2318_list_fits.csv
+**/*_recon_ratios_norm.csv
+**/continuum_ratio_summary.csv
 
