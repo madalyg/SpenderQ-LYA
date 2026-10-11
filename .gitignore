@@ -169,4 +169,5 @@ cython_debug/
 *.fits
 *.txt
 *.csv
+!**/J2318_list_fits.csv
 
