@@ -44,16 +44,27 @@ Trained SpenderQ weights (`qso.dr1.hiz*.pt`) are under `src/spenderq/dat/`. The 
 From the repo root:
 
 ```bash
-python src/spenderq/init_directories.py path/to/list.csv path/to/case_dir
+cd src/spenderq
 ```
 
-Set `CASE_DIR` and `CSV_PATH` at the top of `analyze_ehvo.py`, then:
+```bash
+python init_directories.py path/to/list.csv path/to/case_dir
+```
+
+If you are using unnormalized files outside of an SDSS release, convert and download them first using this script:
+```bash
+python convert_fits.py
+```
+
+Next, set `CASE_DIR` and `CSV_PATH` at the top of `analyze_ehvo.py`, then:
 
 ```bash
-python src/spenderq/analyze_ehvo.py
+python analyze_ehvo.py
 ```
 
 `init_directories` tries SDSS DR16 SAS (eBOSS, then SDSS-I/II). Already-downloaded FITS files are skipped.
+
+
 
 ## Outputs (per quasar)
 

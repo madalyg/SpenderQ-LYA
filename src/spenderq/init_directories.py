@@ -13,6 +13,7 @@ Usage:
 
 Example:
     python init_directories.py dat/Variability/NV/NV_variability_list_fits.csv dat/Variability/NV
+    python init_directories.py dat/Dense_Lya/J2318_list_fits.csv dat/Dense_Lya/J2318
 """
 
 import csv
@@ -127,7 +128,7 @@ def init_directories(csv_path, base_dir):
             except RuntimeError as exc:
                 print(f"  [FAILED] {exc}")
 
-    print(f"\nQuasar directories are nowunder: {base_dir.resolve()}")
+    print(f"\nQuasar directories are now under: {base_dir.resolve()}")
 
 
 if __name__ == "__main__":
