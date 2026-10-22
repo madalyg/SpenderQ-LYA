@@ -16,7 +16,7 @@ It is built to run on large datasets: one CSV of quasars and two FITS filenames 
 
 Optional:
 
-- **`analyze_ehvo_remove_lya.py`** — same analysis after interpolating sharp Lyα forest spikes (`remove_lya.py`).
+- **`analyze_ehvo_remove_lya.py`** — same analysis with sharp Lyα forest spikes interpolated in plots (`remove_lya.py`). Generated text data retain the original, unmodified spectra.
 - **`summarize_continuum_ratios.py`** — median continuum ratios in rest-frame bands across a case directory.
 - **`convert_fits.py`** — rest-frame text spectra → observed-frame FITS (one-off helper).
 

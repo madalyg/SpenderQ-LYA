@@ -22,6 +22,7 @@ if __package__ is None or __package__ == "":
 
 from spenderq import util as U
 from spenderq.desi_qso import DESI
+from spenderq.remove_lya import clean_lyalpha_residuals
 from spenderq.spenderq import SpenderQ
 
 ########################################################################################################################################
@@ -518,7 +519,7 @@ def quasar_dir(quasar_name):
     return quasar_name[:idx] if idx != -1 else quasar_name
 
 
-def analyze_file(path, z_qso):
+def analyze_file(path, z_qso, remove_lya=False):
     wave_obs, flux, ivar = load_sdss_like_spectrum(path, z_qso)
     flux, ivar, norm = normalize_spectrum(wave_obs, flux, ivar, z_qso)
     wave_grid, flux_grid, ivar_grid = resample_to_spenderq_grid(wave_obs, flux, ivar)
@@ -526,10 +527,32 @@ def analyze_file(path, z_qso):
         wave_grid, flux_grid, ivar_grid, z_qso
     )
 
+    plot_flux = flux_grid.copy()
+    plot_cont_norm_ratio = cont_norm_ratio.copy()
+    n_lya_interpolated = 0
+    if remove_lya:
+        wave_rest = wave_grid / (1.0 + z_qso)
+        lya_forest = (wave_rest > LYB) & (wave_rest < LYA)
+        _, flux_without_lya, clean_mask = clean_lyalpha_residuals(
+            wave_rest, flux_grid, continuum_grid
+        )
+        interpolated = (
+            lya_forest
+            & ~clean_mask
+            & (ivar_grid > 0)
+            & np.isfinite(continuum_grid)
+            & (continuum_grid != 0)
+        )
+        plot_cont_norm_ratio[interpolated] = flux_without_lya[interpolated]
+        plot_flux[interpolated] = (
+            flux_without_lya[interpolated] * continuum_grid[interpolated]
+        )
+        n_lya_interpolated = int(np.count_nonzero(interpolated))
+
     analysis_path, n_lya_removed = plot_analysis(
         path,
         wave_grid,
-        flux_grid,
+        plot_flux,
         continuum_grid,
         ivar_grid,
         weight_clipped,
@@ -538,17 +561,22 @@ def analyze_file(path, z_qso):
     analysis_obs_path = plot_analysis_observed(
         path,
         wave_grid,
-        flux_grid,
+        plot_flux,
         continuum_grid,
         ivar_grid,
         weight_clipped,
         z_qso,
     )
     ratio_path = plot_continuum_over_spectrum_restframe(
-        path, wave_grid, flux_grid, continuum_grid, ivar_grid, z_qso
+        path, wave_grid, plot_flux, continuum_grid, ivar_grid, z_qso
     )
     flux_recon_path = save_flux_over_recon_txt(path, wave_grid, cont_norm_ratio)
     print(f"{path.name}: normalization={norm:.4g}")
+    if remove_lya:
+        print(
+            f"{path.name}: interpolated {n_lya_interpolated} sharp "
+            "Ly-alpha forest pixels for plots"
+        )
     print(f"Saved {analysis_path} ({n_lya_removed} Ly-alpha forest pixels masked)")
     print(f"Saved {analysis_obs_path}")
     print(f"Saved {ratio_path}")
@@ -559,6 +587,7 @@ def analyze_file(path, z_qso):
         "wave_grid": wave_grid,
         "continuum_grid": continuum_grid,
         "cont_norm_ratio": cont_norm_ratio,
+        "plot_cont_norm_ratio": plot_cont_norm_ratio,
     }
 
 
@@ -599,7 +628,7 @@ def _run_quasar(quasar_name, obs1_filename, obs2_filename, z_qso, CASE_DIR):
         if not fits_path.exists():
             print(f"  [skip] FITS not found: {fits_path}")
             continue
-        result = analyze_file(fits_path, z_qso)
+        result = analyze_file(fits_path, z_qso, remove_lya=True)
         if result is not None:
             reconstructions.append(result)
 
@@ -665,13 +694,13 @@ def _run_quasar(quasar_name, obs1_filename, obs2_filename, z_qso, CASE_DIR):
 
     cont_norm_epoch_ratio_png = plot_cont_norm_ratio_observed(
         a["path"], b["path"], a["wave_grid"],
-        a["cont_norm_ratio"], b["cont_norm_ratio"], z_qso,
+        a["plot_cont_norm_ratio"], b["plot_cont_norm_ratio"], z_qso,
     )
     print(f"Saved {cont_norm_epoch_ratio_png}")
 
     cont_norm_epoch_diff_png = plot_cont_norm_ratio_difference_observed(
         a["path"], b["path"], a["wave_grid"],
-        a["cont_norm_ratio"], b["cont_norm_ratio"], z_qso,
+        a["plot_cont_norm_ratio"], b["plot_cont_norm_ratio"], z_qso,
     )
     print(f"Saved {cont_norm_epoch_diff_png}")
 
