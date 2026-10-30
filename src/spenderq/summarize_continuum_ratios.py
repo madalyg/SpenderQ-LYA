@@ -11,8 +11,7 @@ from pathlib import Path
 import numpy as np
 
 from spenderq.continuum_regions import REGIONS
-
-RATIO_LO, RATIO_HI = 0.0, 5.0
+from spenderq.success_criteria import region_ratio_stats
 
 
 def load_redshifts(directory: Path) -> dict[str, float]:
@@ -70,30 +69,7 @@ def resolve_z(quasar: str, redshifts: dict[str, float], override: float | None) 
 
 def summarize_pair(path: Path, z: float) -> list[dict]:
     data = np.loadtxt(path)
-    wave_obs, ratio = data[:, 0], data[:, 1]
-    wave_rest = wave_obs / (1.0 + z)
-    good = np.isfinite(ratio) & (ratio > RATIO_LO) & (ratio < RATIO_HI)
-
-    rows = []
-    for region in REGIONS:
-        mask = region.mask_fn(wave_rest, wave_obs, good)
-        if mask.sum() < 5:
-            continue
-        r = ratio[mask]
-        rows.append(
-            {
-                "file": path.name,
-                "region_id": region.region_id,
-                "region": region.label,
-                "n_pix": int(mask.sum()),
-                "median": float(np.median(r)),
-                "p16": float(np.percentile(r, 16)),
-                "p84": float(np.percentile(r, 84)),
-                "min": float(r.min()),
-                "max": float(r.max()),
-            }
-        )
-    return rows
+    return [{"file": path.name, **row} for row in region_ratio_stats(data[:, 0], data[:, 1], z)]
 
 
 def iter_region_groups(pair_rows: list[dict]) -> Iterator[tuple[str, str, list[dict]]]:

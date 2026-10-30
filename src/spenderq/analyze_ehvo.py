@@ -23,6 +23,7 @@ if __package__ is None or __package__ == "":
 from spenderq import util as U
 from spenderq.desi_qso import DESI
 from spenderq.spenderq import SpenderQ
+from spenderq.success_criteria import epoch_continuum_stability, save_stats_pdf, safe_ratio
 
 ########################################################################################################################################
 
@@ -603,8 +604,10 @@ def run_quasar(quasar_name, obs1_filename, obs2_filename, z_qso, CASE_DIR):
     FLUX_OVER_RECON_DIR.mkdir(parents=True, exist_ok=True)
 
     fits1, fits2 = qso_dir / obs1_filename, qso_dir / obs2_filename
-    # Skip reruns when inputs unchanged, and delete .complete to force a full reprocess.
-    done = OUTPUT_DIR / ".complete"
+    mjd_a, mjd_b = get_mjd(fits1), get_mjd(fits2)
+    # One marker per pair so quasars with 3+ epochs run every requested pair.
+    # Skip reruns when inputs unchanged; delete the marker to force a reprocess.
+    done = OUTPUT_DIR / f".complete_{mjd_a}_{mjd_b}"
     if (
         done.exists()
         and fits1.exists()
@@ -612,11 +615,10 @@ def run_quasar(quasar_name, obs1_filename, obs2_filename, z_qso, CASE_DIR):
         and done.stat().st_mtime >= fits1.stat().st_mtime
         and done.stat().st_mtime >= fits2.stat().st_mtime
     ):
-        print(f"\n{'='*60}\n  [skip] {qso_prefix} — delete {done.name} to rerun\n")
-        mjd_a, mjd_b = get_mjd(fits1), get_mjd(fits2)
+        print(f"\n{'='*60}\n  [skip] {qso_prefix} {mjd_a} vs {mjd_b} — delete {done.name} to rerun\n")
         return [
-            RECON_NORM_RATIOS_DIR / f"{mjd_a}_over_{mjd_b}recon.txt",
-            RECON_NORM_RATIOS_DIR / f"{mjd_b}_over_{mjd_a}recon.txt",
+            RECON_NORM_RATIOS_DIR / f"{mjd_a}_over_{mjd_b}_recon.txt",
+            RECON_NORM_RATIOS_DIR / f"{mjd_b}_over_{mjd_a}_recon.txt",
         ], z_qso
 
     print(f"\n{'='*60}")
@@ -647,13 +649,11 @@ def run_quasar(quasar_name, obs1_filename, obs2_filename, z_qso, CASE_DIR):
     in_range = (wave >= ratio_lo) & (wave <= ratio_hi)
 
     # SpenderQ continuum_A / continuum_B (not flux/recon). Dividing mutually indepdent recons from different epochs checks recon stability between epochs.
+    ratio_ab = safe_ratio(cont_a, cont_b)
+    ratio_ba = safe_ratio(cont_b, cont_a)
     for label_num, label_den, ratio in [
-        (a["path"].stem, b["path"].stem,
-         np.divide(cont_a, cont_b, out=np.full_like(cont_a, np.nan),
-                   where=np.isfinite(cont_a) & np.isfinite(cont_b) & (cont_b != 0))),
-        (b["path"].stem, a["path"].stem,
-         np.divide(cont_b, cont_a, out=np.full_like(cont_b, np.nan),
-                   where=np.isfinite(cont_a) & np.isfinite(cont_b) & (cont_a != 0))),
+        (a["path"].stem, b["path"].stem, ratio_ab),
+        (b["path"].stem, a["path"].stem, ratio_ba),
     ]:
         valid = in_range & np.isfinite(ratio)
         outpath = OUTPUT_DIR / f"{label_num}_vs_{label_den}_ratio_norm.txt"
@@ -662,11 +662,17 @@ def run_quasar(quasar_name, obs1_filename, obs2_filename, z_qso, CASE_DIR):
                    fmt="%.6f")
         print(f"Saved {outpath}")
 
+    stability_pdf = OUTPUT_DIR / (
+        f"{a['path'].stem}_vs_{b['path'].stem}_epoch_continuum_stability.pdf"
+    )
+    save_stats_pdf(
+        epoch_continuum_stability(wave, cont_a, cont_b, z_qso),
+        f"Epoch continuum stability ({a['path'].stem} / {b['path'].stem})",
+        stability_pdf,
+    )
+    print(f"Saved {stability_pdf}")
+
     # Continuum ratio panels figure
-    ratio_ab = np.divide(cont_a, cont_b, out=np.full_like(cont_a, np.nan),
-                         where=np.isfinite(cont_a) & np.isfinite(cont_b) & (cont_b != 0))
-    ratio_ba = np.divide(cont_b, cont_a, out=np.full_like(cont_b, np.nan),
-                         where=np.isfinite(cont_a) & np.isfinite(cont_b) & (cont_a != 0))
     mjd_a = get_mjd(a["path"])
     mjd_b = get_mjd(b["path"])
     fig, axes = plt.subplots(2, 1, figsize=(12, 6), constrained_layout=True)
