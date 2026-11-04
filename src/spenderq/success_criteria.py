@@ -48,7 +48,7 @@ def region_ratio_stats(wave_obs, ratio, z):
 
 
 def epoch_continuum_stability(wave_obs, cont_a, cont_b, z):
-    """Ratio of two epochs' independent reconstructions; a median near 1 means both
+    """Ratio of two epochs' independent reconstructions. a median near 1 means both
     epochs recovered the same underlying continuum."""
     return region_ratio_stats(wave_obs, safe_ratio(cont_a, cont_b), z)
 

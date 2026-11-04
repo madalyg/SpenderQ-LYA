@@ -171,4 +171,5 @@ cython_debug/
 **/*_recon_ratios_norm.csv
 **/continuum_ratio_summary.csv
 **/*_epoch_continuum_stability.pdf
+.complete
 

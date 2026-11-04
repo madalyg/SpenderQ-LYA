@@ -23,6 +23,7 @@ if __package__ is None or __package__ == "":
 from spenderq import util as U
 from spenderq.desi_qso import DESI
 from spenderq.spenderq import SpenderQ
+from spenderq.success_criteria import epoch_continuum_stability, save_stats_pdf, safe_ratio
 
 ########################################################################################################################################
 
@@ -526,6 +527,32 @@ def analyze_file(path, z_qso):
         wave_grid, flux_grid, ivar_grid, z_qso
     )
 
+<<<<<<< Updated upstream
+=======
+    plot_flux = flux_grid.copy()
+    plot_cont_norm_ratio = cont_norm_ratio.copy()
+    n_lya_interpolated = 0
+    if remove_lya:
+        wave_rest = wave_grid / (1.0 + z_qso)
+        lya_forest = (wave_rest > LYB) & (wave_rest < LYA)
+        _, flux_without_lya, clean_mask = clean_lyalpha_residuals(
+            wave_rest, flux_grid, continuum_grid
+        )
+        # A pixel is interpolated only if every condition is true: 1 it's in the Ly-α forest, 2 it's not clean, 3 it has a valid inverse variance, 4 the continuum is finite and non-zero.
+        interpolated = (
+            lya_forest
+            & ~clean_mask
+            & (ivar_grid > 0)
+            & np.isfinite(continuum_grid)
+            & (continuum_grid != 0)
+        )
+        plot_cont_norm_ratio[interpolated] = flux_without_lya[interpolated]
+        plot_flux[interpolated] = (
+            flux_without_lya[interpolated] * continuum_grid[interpolated]
+        )
+        n_lya_interpolated = int(np.count_nonzero(interpolated))
+
+>>>>>>> Stashed changes
     analysis_path, n_lya_removed = plot_analysis(
         path,
         wave_grid,
@@ -615,13 +642,11 @@ def _run_quasar(quasar_name, obs1_filename, obs2_filename, z_qso, CASE_DIR):
     in_range = (wave >= ratio_lo) & (wave <= ratio_hi)
 
     # Continuum ratio text files
+    ratio_ab = safe_ratio(cont_a, cont_b)
+    ratio_ba = safe_ratio(cont_b, cont_a)
     for label_num, label_den, ratio in [
-        (a["path"].stem, b["path"].stem,
-         np.divide(cont_a, cont_b, out=np.full_like(cont_a, np.nan),
-                   where=np.isfinite(cont_a) & np.isfinite(cont_b) & (cont_b != 0))),
-        (b["path"].stem, a["path"].stem,
-         np.divide(cont_b, cont_a, out=np.full_like(cont_b, np.nan),
-                   where=np.isfinite(cont_a) & np.isfinite(cont_b) & (cont_a != 0))),
+        (a["path"].stem, b["path"].stem, ratio_ab),
+        (b["path"].stem, a["path"].stem, ratio_ba),
     ]:
         valid = in_range & np.isfinite(ratio)
         outpath = OUTPUT_DIR / f"{label_num}_vs_{label_den}_ratio_norm.txt"
@@ -630,11 +655,17 @@ def _run_quasar(quasar_name, obs1_filename, obs2_filename, z_qso, CASE_DIR):
                    fmt="%.6f")
         print(f"Saved {outpath}")
 
+    stability_pdf = OUTPUT_DIR / (
+        f"{a['path'].stem}_vs_{b['path'].stem}_epoch_continuum_stability.pdf"
+    )
+    save_stats_pdf(
+        epoch_continuum_stability(wave, cont_a, cont_b, z_qso),
+        f"Epoch continuum stability ({a['path'].stem} / {b['path'].stem})",
+        stability_pdf,
+    )
+    print(f"Saved {stability_pdf}")
+
     # Continuum ratio panels figure
-    ratio_ab = np.divide(cont_a, cont_b, out=np.full_like(cont_a, np.nan),
-                         where=np.isfinite(cont_a) & np.isfinite(cont_b) & (cont_b != 0))
-    ratio_ba = np.divide(cont_b, cont_a, out=np.full_like(cont_b, np.nan),
-                         where=np.isfinite(cont_a) & np.isfinite(cont_b) & (cont_a != 0))
     mjd_a = get_mjd(a["path"])
     mjd_b = get_mjd(b["path"])
     fig, axes = plt.subplots(2, 1, figsize=(12, 6), constrained_layout=True)
