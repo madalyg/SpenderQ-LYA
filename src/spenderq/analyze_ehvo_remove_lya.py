@@ -23,7 +23,7 @@ if __package__ is None or __package__ == "":
 from spenderq import util as U
 from spenderq.desi_qso import DESI
 from spenderq.spenderq import SpenderQ
-from spenderq.success_criteria import epoch_continuum_stability, save_stats_pdf, safe_ratio
+from spenderq.multi_epoch.success_criteria import epoch_continuum_stability, save_stats_pdf, safe_ratio
 
 ########################################################################################################################################
 

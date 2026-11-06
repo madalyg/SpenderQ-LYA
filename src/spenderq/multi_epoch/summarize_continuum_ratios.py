@@ -7,11 +7,15 @@ import argparse
 import csv
 from collections.abc import Iterator
 from pathlib import Path
+import sys
 
 import numpy as np
 
+if __package__ is None or __package__ == "":
+    sys.path.insert(0, str(Path(__file__).resolve().parents[2]))
+
 from spenderq.continuum_regions import REGIONS
-from spenderq.success_criteria import region_ratio_stats
+from spenderq.multi_epoch.success_criteria import region_ratio_stats
 
 
 def load_redshifts(directory: Path) -> dict[str, float]:
