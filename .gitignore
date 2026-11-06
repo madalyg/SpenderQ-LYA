@@ -169,7 +169,9 @@ cython_debug/
 *.fits
 *.txt
 **/*_recon_ratios_norm.csv
+**/*_recon_norm_individual.csv
 **/continuum_ratio_summary.csv
 **/*_epoch_continuum_stability.pdf
 .complete
+.complete_*
 
