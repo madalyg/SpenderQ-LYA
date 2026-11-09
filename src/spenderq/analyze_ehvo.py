@@ -8,7 +8,11 @@ using a modified version of SpenderQ (located in SpenderQ.py). On start-up it as
     N  Reconstruct every observation independently and save its flux / reconstruction
        to recon_norm_individual/, without dividing by another epoch.
 
-A CSV row with only one observation is still reconstructed in either mode.
+A CSV row with only one observation is still reconstructed either way.
+
+It then asks "Convert output to rest frame (Y) or keep in observed frame (N)?". Y writes the
+wavelength column of the recon_norm_ratios/ or recon_norm_individual/ txt files as
+wavelength / (1 + z); N keeps observed wavelengths. Plots are unaffected.
 
 @author: Madaly
 """
@@ -54,13 +58,33 @@ def ask_use_ratios():
         print("Please enter Y or N.")
 
 
-def is_up_to_date(marker, inputs, outputs):
-    """True when marker is newer than every input and every output exists.
+def ask_rest_frame():
+    """Prompt until the user answers Y or N; True means save the txt outputs in the rest frame."""
+    while True:
+        answer = input("Convert output to rest frame (Y) or keep in observed frame (N)? ").strip().upper()
+        if answer in ("Y", "N"):
+            return answer == "Y"
+        print("Please enter Y or N.")
+
+
+def frame_name(rest_frame):
+    return "rest" if rest_frame else "observed"
+
+
+def mark_complete(marker, rest_frame):
+    """Touch marker, recording the wavelength frame its txt outputs were written in."""
+    marker.write_text(frame_name(rest_frame))
+
+
+def is_up_to_date(marker, inputs, outputs, rest_frame=False):
+    """True when marker is newer than every input, every output exists, and the outputs
+    were written in the requested frame (an empty, older marker means observed).
 
     Delete the marker to force a reprocess.
     """
     return (
         marker.exists()
+        and (marker.read_text().strip() or "observed") == frame_name(rest_frame)
         and all(p.exists() and marker.stat().st_mtime >= p.stat().st_mtime for p in inputs)
         and all(p.exists() for p in outputs)
     )
@@ -98,7 +122,7 @@ def print_quasar_header(quasar, qso_dir):
     print(f"Dir:    {qso_dir}")
 
 
-def run_quasar_ratios(quasar, model):
+def run_quasar_ratios(quasar, model, rest_frame=False):
     """Y: reconstruct both epochs and write the epoch-vs-epoch outputs.
 
     Returns the recon_norm_ratios txt paths (empty if fewer than two spectra are available).
@@ -115,7 +139,7 @@ def run_quasar_ratios(quasar, model):
         # One marker per pair so quasars with 3+ epochs run every requested pair.
         done = analysis_dir / f".complete_{mjd_a}_{mjd_b}"
         ratio_txts = recon_norm_ratio_paths(RECON_NORM_RATIOS_DIR, *requested)
-        if is_up_to_date(done, requested, ratio_txts):
+        if is_up_to_date(done, requested, ratio_txts, rest_frame):
             print(f"\n{'='*60}\n  [skip] {qso_dir.name} {mjd_a} vs {mjd_b} — delete {done.name} to rerun\n")
             return ratio_txts
 
@@ -128,12 +152,12 @@ def run_quasar_ratios(quasar, model):
         print(f"  [skip] ratios need 2 spectra, got {len(epochs)} — skipping cross-file outputs")
         return []
 
-    ratio_txts = compare_epochs(epochs[0], epochs[1], analysis_dir, RECON_NORM_RATIOS_DIR, show=SHOW_PLOT)
-    done.touch()
+    ratio_txts = compare_epochs(epochs[0], epochs[1], analysis_dir, RECON_NORM_RATIOS_DIR, show=SHOW_PLOT, rest_frame=rest_frame)
+    mark_complete(done, rest_frame)
     return ratio_txts
 
 
-def run_quasar_individual(quasar, model):
+def run_quasar_individual(quasar, model, rest_frame=False):
     """N: reconstruct every listed epoch on its own and save its flux / recon.
 
     Returns the recon_norm_individual txt paths.
@@ -148,12 +172,12 @@ def run_quasar_individual(quasar, model):
     for fits_path in existing_fits(qso_dir, quasar["observations"]):
         txt = RECON_NORM_INDIVIDUAL_DIR / f"{fits_path.stem}_over_recon.txt"
         done = analysis_dir / f".complete_individual_{fits_path.stem}"
-        if is_up_to_date(done, [fits_path], [txt]):
+        if is_up_to_date(done, [fits_path], [txt], rest_frame):
             print(f"  [skip] {fits_path.name} — delete {done.name} to rerun")
         else:
             epoch = reconstruct_and_plot(fits_path, z_qso, model, analysis_dir)
-            print(f"Saved {save_recon_norm_txt(epoch, txt)}")
-            done.touch()
+            print(f"Saved {save_recon_norm_txt(epoch, txt, rest_frame)}")
+            mark_complete(done, rest_frame)
         saved.append(txt)
     return saved
 
@@ -162,6 +186,7 @@ if __name__ == "__main__":
     torch.set_grad_enabled(False)  # We are not training the model, only running inference (aka running the model forward)
 
     use_ratios = ask_use_ratios()
+    rest_frame = ask_rest_frame()
     if use_ratios:
         run_quasar, out_dir, csv_suffix = run_quasar_ratios, RECON_NORM_RATIOS_DIR, "recon_ratios_norm"
     else:
@@ -177,7 +202,7 @@ if __name__ == "__main__":
         if not quasar["observations"]:
             print(f"  [skip] {quasar['name']}: no observation filenames in {CSV_PATH.name}")
             continue
-        for txt in run_quasar(quasar, model):
+        for txt in run_quasar(quasar, model, rest_frame):
             summary_entries.append((txt, quasar["redshift"]))
 
     if summary_entries:

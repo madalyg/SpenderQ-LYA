@@ -3,6 +3,7 @@
 import numpy as np
 
 from spenderq.multi_epoch.success_criteria import safe_ratio
+from spenderq.reconstruction.outputs import output_wavelength
 from spenderq.reconstruction.spectrum_io import get_mjd
 from spenderq.spectral_lines import lya_region_observed
 
@@ -53,17 +54,18 @@ def recon_norm_ratio_paths(out_dir, path_a, path_b):
     ]
 
 
-def save_recon_norm_ratio_txt(a, b, ratio_ab, ratio_ba, out_dir):
-    """Save (flux/recon) ratios in the observed frame for absorption.py.
+def save_recon_norm_ratio_txt(a, b, ratio_ab, ratio_ba, out_dir, rest_frame=False):
+    """Save (flux/recon) ratios for absorption.py, in the observed frame unless rest_frame is True.
 
-    Columns: observed wavelength, ratio, err (NaN).
+    Columns: wavelength (observed, or rest frame using epoch A's z), ratio, err (NaN).
     """
     paths = recon_norm_ratio_paths(out_dir, a.path, b.path)
+    wave = output_wavelength(a.wave, a.z_qso, rest_frame)
     for outpath, ratio in zip(paths, [ratio_ab, ratio_ba]):
-        valid = np.isfinite(a.wave) & np.isfinite(ratio)
+        valid = np.isfinite(wave) & np.isfinite(ratio)
         np.savetxt(
             outpath,
-            np.column_stack([a.wave[valid], ratio[valid], np.full(valid.sum(), np.nan)]),
+            np.column_stack([wave[valid], ratio[valid], np.full(valid.sum(), np.nan)]),
             fmt="%.6f",
         )
     return paths

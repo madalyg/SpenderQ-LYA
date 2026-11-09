@@ -10,17 +10,23 @@ ABSORPTION_CSV_HEADER = [
 ]
 
 
-def save_recon_norm_txt(epoch, outpath):
-    """Save flux / SpenderQ continuum of one epoch as an observed-frame text file.
+def output_wavelength(wave_obs, z_qso, rest_frame=False):
+    """Observed wavelengths, or rest-frame wavelengths (wave_obs / (1 + z)) when rest_frame is True."""
+    return wave_obs / (1.0 + z_qso) if rest_frame else wave_obs
 
-    Columns: observed wavelength, flux_over_recon, err.
+
+def save_recon_norm_txt(epoch, outpath, rest_frame=False):
+    """Save flux / SpenderQ continuum of one epoch as a text file.
+
+    Columns: wavelength (observed, or rest frame if rest_frame), flux_over_recon, err.
     """
     valid = np.isfinite(epoch.wave) & np.isfinite(epoch.recon_norm)
+    wave = output_wavelength(epoch.wave, epoch.z_qso, rest_frame)
     np.savetxt(
         outpath,
-        np.column_stack([epoch.wave[valid], epoch.recon_norm[valid], epoch.recon_norm_err[valid]]),
+        np.column_stack([wave[valid], epoch.recon_norm[valid], epoch.recon_norm_err[valid]]),
         fmt="%.6f",
-        header="wave_obs  flux_over_recon  err",
+        header=f"{'wave_rest' if rest_frame else 'wave_obs'}  flux_over_recon  err",
     )
     return outpath
 
