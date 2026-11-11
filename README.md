@@ -11,15 +11,16 @@ It is built to run on large datasets: one CSV of quasars and two FITS filenames 
 ## Pipeline
 
 1. **CSV** — one row per quasar, two observations.
-2. **`init_directories.py`** — one folder per quasar; downloads the two SDSS spectra.
-3. **`analyze_ehvo.py`** — SpenderQ reconstruction for each spectrum, analysis plots, and a direct comparison of the two epochs.
+2. **`convert_fits.py`** — converts the dereddened text spectra in `<case>/input-files-unnormalized/` (`.dr16`, `.dr9`, `.txt`) to observed-frame FITS with an `ivar` column, in `<case>/input-files-fits/`.
+3. **`init_directories.py`** — one folder per quasar, filled with its dereddened FITS from `input-files-fits/` (or raw SDSS spectra downloaded from SAS with `--download`).
+4. **`analyze_ehvo.py`** — SpenderQ reconstruction for each spectrum and analysis plots. It asks `Analyze multi-epoch spectra using ratios? (Y/N)`:
+   - **Y** — also compares the two epochs directly: continuum-stability ratios, `(flux/recon)` ratios and differences, and `recon_norm_ratios/` text files.
+   - **N** — saves each epoch's `flux / recon` to `recon_norm_individual/` without dividing by another epoch.
 
 Optional:
 
 - **`analyze_ehvo_remove_lya.py`** — same analysis after interpolating sharp Lyα forest spikes (`remove_lya.py`).
-- **`summarize_continuum_ratios.py`** — median continuum ratios in rest-frame bands across a case directory.
-- **`convert_fits.py`** — rest-frame text spectra → observed-frame FITS (one-off helper).
-
+- **`multi_epoch/summarize_continuum_ratios.py`** — median continuum ratios in rest-frame bands across a case directory (run after a **Y** analysis; reads `*_ratio_norm.txt`).
 ## Input CSV
 
 Columns:
@@ -28,7 +29,7 @@ Columns:
 Quasar Name, Observation 1, Observation 2, Redshift
 ```
 
-`Observation 1` / `Observation 2` are SDSS spectrum filenames, e.g. `spec-0948-52428-0370.fits`.
+`Observation 1` / `Observation 2` are SDSS spectrum filenames, e.g. `spec-0948-52428-0370.fits`. A row may leave one observation empty; that spectrum is still reconstructed, and ratio mode skips its ratios.
 
 ## Setup
 
@@ -47,14 +48,16 @@ From the repo root:
 cd src/spenderq
 ```
 
+Put the dereddened spectra in `input-files-unnormalized/` next to the CSV. Their filenames must contain `PLATE-MJD-FIBER` (e.g. `6138-57328-0746-dered.dr16`), with columns wavelength, flux, error. Rest-frame files are shifted to the observed frame with the CSV redshift. Then:
+
 ```bash
-python init_directories.py path/to/list.csv path/to/case_dir
+python convert_fits.py path/to/case_dir/list.csv
+python init_directories.py path/to/case_dir/list.csv
 ```
 
-If you are using unnormalized files outside of an SDSS release, convert and download them first using this script:
-```bash
-python convert_fits.py
-```
+`convert_fits.py` reports any CSV observation with no input file. `init_directories.py` replaces a quasar's existing FITS (e.g. an earlier SAS download) when the converted file differs, so `analyze_ehvo.py` reruns that quasar; identical files are skipped. Both scripts also take explicit folders: `python convert_fits.py CSV INPUT_DIR OUTPUT_DIR` and `python init_directories.py CSV BASE_DIR --fits-dir DIR`.
+
+To use raw SDSS spectra instead, skip `convert_fits.py` and run `python init_directories.py path/to/case_dir/list.csv --download`. It tries SDSS DR16 SAS (eBOSS, then SDSS-I/II) and skips files that are already downloaded.
 
 Next, set `CASE_DIR` and `CSV_PATH` at the top of `analyze_ehvo.py`, then:
 
@@ -62,7 +65,7 @@ Next, set `CASE_DIR` and `CSV_PATH` at the top of `analyze_ehvo.py`, then:
 python analyze_ehvo.py
 ```
 
-`init_directories` tries SDSS DR16 SAS (eBOSS, then SDSS-I/II). Already-downloaded FITS files are skipped.
+Answer `Y` for the epoch-vs-epoch ratio analysis or `N` for individual epochs. Finished quasars are skipped on reruns; delete the `.complete_*` marker in `spenderq_analysis/` to reprocess one.
 
 
 
@@ -72,24 +75,29 @@ Under `case_dir/<quasar>/`:
 
 | Path | Contents |
 |------|----------|
-| `spec-*.fits` | Downloaded spectra |
-| `spenderq_analysis/` | Reconstruction plots (rest + observed), continuum-ratio and flux/continuum-ratio panels, `*_ratio_norm.txt` |
-| `../flux_over_recon/` | Per-epoch `flux / continuum` text files. This is the continuum-normalized flux for each spectrum. |
-| `../recon_norm_ratios/` | `(flux/cont)_A / (flux/cont)_B` text files, named by MJD. This is the ratio of two continuum-normalized spectra, which highlights variability across separate observations of the same quasar. |
+| `spec-*.fits` | Input spectra: dereddened FITS from `convert_fits.py`, or SAS downloads with `--download` |
+| `spenderq_analysis/` | Reconstruction plots (rest + observed) and flux/continuum plots for every epoch. With **Y**, also continuum-ratio and flux/continuum-ratio panels and `*_ratio_norm.txt` |
+| `../recon_norm_ratios/` | **Y**: `(flux/cont)_A / (flux/cont)_B` text files, named by MJD. This is the ratio of two continuum-normalized spectra, which highlights variability across separate observations of the same quasar. |
+| `../recon_norm_individual/` | **N**: per-epoch `flux / continuum` text files in the observed frame (wavelength, flux/recon, error), named `spec-PLATE-MJD-FIBER_over_recon.txt`. Not divided by any other epoch. |
 
-A case-level summary CSV of the recon-ratio files is written next to the case directory.
+A case-level summary CSV in the `absorption.py` input format is written in the case directory: `<case>_recon_ratios_norm.csv` (**Y**) or `<case>_recon_norm_individual.csv` (**N**).
 
 ## Layout
 
 ```
 src/spenderq/
-  init_directories.py      # CSV → folders + SDSS downloads
-  analyze_ehvo.py          # reconstructions + epoch comparison
+  convert_fits.py          # dereddened text spectra → observed-frame FITS with ivar
+  init_directories.py      # CSV → quasar folders, filled from input-files-fits/ (or SAS with --download)
+  analyze_ehvo.py          # Y/N prompt; runs the ratio or individual-epoch analysis
+  reconstruction/          # shared: CSV + FITS input, SpenderQ continuum, flux/recon + absorption CSV output
+  plotting/                # shared: per-epoch reconstruction plots, line markers, figure saving
+  multi_epoch/             # Y only: epoch-vs-epoch ratios, ratio/difference plots, recon_norm_ratios/ files,
+                           #   success criteria (epoch continuum stability per rest-frame band),
+                           #   summarize_continuum_ratios.py (case-level summary of those checks)
+  spectral_lines.py        # Lyα, Lyβ, ion-line wavelengths
   analyze_ehvo_remove_lya.py
   remove_lya.py            # median-filter Lyα spike cleaning
-  summarize_continuum_ratios.py
   continuum_regions.py     # rest-frame band masks
-  convert_fits.py
   spenderq.py              # SpenderQ model wrapper (upstream)
   lyalpha.py, desi_qso.py, util.py
 ```
