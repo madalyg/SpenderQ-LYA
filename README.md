@@ -108,3 +108,5 @@ Continuum reconstruction is [SpenderQ](https://github.com/changhoonhahn/SpenderQ
 
 <img src="./doc/spenderq_framework.png" width="600" alt="SpenderQ framework schematic">
 
+<img src="./doc/spenderq_lya_pipeline.png" width="100%" alt="SpenderQ-LYA EHVO pipeline">
+
