@@ -21,6 +21,7 @@ Optional:
 
 - **`analyze_ehvo_remove_lya.py`** — same analysis after interpolating sharp Lyα forest spikes (`remove_lya.py`).
 - **`multi_epoch/summarize_continuum_ratios.py`** — median continuum ratios in rest-frame bands across a case directory (run after a **Y** analysis; reads `*_ratio_norm.txt`).
+
 ## Input CSV
 
 Columns:
@@ -102,11 +103,11 @@ src/spenderq/
   lyalpha.py, desi_qso.py, util.py
 ```
 
+<img src="./doc/spenderq_lya_pipeline.svg" width="2200" alt="SpenderQ-LYA EHVO pipeline">
+
 ## SpenderQ
 
 Continuum reconstruction is [SpenderQ](https://github.com/changhoonhahn/SpenderQ) (Hahn et al.): a data-driven spectrum autoencoder that masks absorption and reconstructs the intrinsic quasar spectrum. This repository adds SDSS data ingestion, per-quasar directory layout, and detailed epoch-to-epoch EHVO analysis on top of that model.
 
 <img src="./doc/spenderq_framework.png" width="600" alt="SpenderQ framework schematic">
-
-<img src="./doc/spenderq_lya_pipeline.png" width="100%" alt="SpenderQ-LYA EHVO pipeline">
 
